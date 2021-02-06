@@ -1,13 +1,19 @@
 module Bot where
-
+import qualified Message 
 import Data.Aeson
 import qualified Data.Text as T
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Char8 as LC
 import GHC.Generics
 import Network.HTTP.Simple
 import qualified Data.Text.Encoding as E
-import Token
+import Control.Monad.State
+import qualified Data.Text.IO as TIO
+import Data.Maybe
+import Data.List
+import qualified Data.Map as Map
 data Bot = Bot {
               ok :: Bool
             , result :: [Results]
@@ -60,38 +66,52 @@ instance FromJSON Chat where
                  <*> v .: "last_name"
                  <*> v .: "type"
 
-
-telegramHost :: BC.ByteString
-telegramHost = "api.telegram.org"
-
-getUpdates :: Int -> B.ByteString
-getUpdates num = "/bot" <> botToken <> method num
-
-method :: Int -> BC.ByteString
-method num = "/getUpdates?offset=" <> (BC.pack . show $ num)
-
-buildRequest :: BC.ByteString -> BC.ByteString -> BC.ByteString -> Request
-buildRequest host method path =
-    setRequestMethod method
-  $ setRequestHost host
-  $ setRequestPath path
-  $ setRequestSecure True
-  $ setRequestPort 443
-    defaultRequest
+data User = User {
+        userID :: Int
+      , activeFunction :: Bool
+      , numberOfRepeat :: Int
+  } deriving (Show, Eq, Ord)
 
 
-createRequest = buildRequest telegramHost "GET" 
+createUser :: Message.UserID -> User
+createUser userId = User {userID = userId, activeFunction = True, numberOfRepeat = defaultNumOfRepeat}
 
-updateRequest num = createRequest $ getUpdates num
+findUsersN :: Message.UserID -> Map.Map Int User -> Int
+findUsersN n users = maybe defaultNumOfRepeat numberOfRepeat user
+  where user = Map.lookup n users
 
-createMessage :: Int -> T.Text -> Query
-createMessage userId text = [("chat_id", Just . BC.pack . show $ userId),("text", Just . E.encodeUtf8 $ text) ]
+addCache :: Int -> User -> State (Map.Map Int User) User
+addCache userId user = state $ \st -> (user, Map.insert userId user st)
 
-sendMessage :: Int -> T.Text -> IO ()
-sendMessage _ "stop" = error "Stop"
-sendMessage userId text = do
-          let message =   setRequestQueryString (createMessage userId text)
-                        $ createRequest $ "/bot" <> botToken <> "/sendMessage"
-          httpNoBody message
-          return ()
+findInCache :: Message.UserID -> State (Map.Map Int User) Int
+findInCache n = state $ \st -> (findUsersN n st, st) 
+
+defaultNumOfRepeat :: Int
+defaultNumOfRepeat = 1
+
+getJSON :: Int -> IO [Results]
+getJSON n = do
+  fetchJSON <- httpLBS $ Message.updateRequest n
+  print $ getResponseStatus fetchJSON
+  let rawJSON = getResponseBody fetchJSON
+  let json = decode rawJSON :: Maybe Bot
+  return . Bot.result . fromJust $ json
+
+startBot :: Int -> Map.Map Int User -> IO ()
+startBot n cache = do
+  result <- getJSON n
+  let last = getLastUpdateId result
+  return ()
+
+getLastUpdateId :: [Bot.Results] -> Int
+getLastUpdateId = Bot.update_id . last 
+
+getTextId :: [Bot.Results] -> [(Message.UserID, Message.MessageText)]
+getTextId = map helper
+  where helper x = (userId x, text x)
+        text x = Bot.text . Bot.message $ x
+        userId x = Bot.userId . Bot.from . Bot.message $ x
+
+requestList :: Int -> [(Int, T.Text)] -> [IO ()]
+requestList n = map (uncurry (Message.sendMessage n))
 

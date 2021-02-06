@@ -29,6 +29,7 @@ library
   exposed-modules:
       Bot
       Lib
+      Message
   other-modules:
       Paths_Bot
   hs-source-dirs:
@@ -39,6 +40,8 @@ library
     , bytestring
     , http-conduit
     , text
+    , mtl
+    , containers
   default-extensions: OverloadedStrings
                     , DeriveGeneric
   default-language: Haskell2010
@@ -57,6 +60,8 @@ executable Bot-exe
     , http-conduit
     , text
     , aeson
+    , mtl
+    , containers
   default-extensions: OverloadedStrings
   default-language: Haskell2010
 

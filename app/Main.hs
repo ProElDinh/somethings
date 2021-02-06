@@ -1,5 +1,6 @@
 module Main where
 import qualified Bot
+import qualified Message
 import qualified Data.Text as T
 import Network.HTTP.Simple
 import Data.Aeson
@@ -10,15 +11,16 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.Text.IO as TIO
 import Data.Maybe
 import qualified Data.Text.Encoding as E
+import Control.Monad
 
 
 main :: IO ()
 main = do
   startBot (-1)
 
-
+startBot :: Int -> IO ()
 startBot n = do
-  fetchJSON <- httpLBS . Bot.updateRequest $ n
+  fetchJSON <- httpLBS . Message.updateRequest $ n
   let rawJSON = getResponseBody fetchJSON
   let json = decode rawJSON :: Maybe Bot.Bot
   if isNothing json
@@ -33,6 +35,7 @@ startBot n = do
         startBot $ getLastUpdateId result + 1
 
 
+
 getLastUpdateId :: [Bot.Results] -> Int
 getLastUpdateId = Bot.update_id . last 
 
@@ -43,4 +46,4 @@ getTextId = map helper
         userId x = Bot.userId . Bot.from . Bot.message $ x
   
 requestList :: [(Int, T.Text)] -> [IO ()]
-requestList = map (uncurry Bot.sendMessage)
+requestList = map (uncurry (Message.sendMessage 0))
