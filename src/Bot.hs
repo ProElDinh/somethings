@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Bot where
 import qualified Message 
 import Data.Aeson
@@ -9,11 +10,11 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import GHC.Generics
 import Network.HTTP.Simple
 import qualified Data.Text.Encoding as E
-import Control.Monad.State
 import qualified Data.Text.IO as TIO
 import Data.Maybe
 import Data.List
 import qualified Data.Map as Map
+import Data.Char
 data Bot = Bot {
               ok :: Bool
             , result :: [Results]
@@ -66,52 +67,87 @@ instance FromJSON Chat where
                  <*> v .: "last_name"
                  <*> v .: "type"
 
+getJSON :: Int -> IO [Results]
+getJSON n = do
+  fetchJSON <- httpLBS $ Message.updateRequest n
+  print $ getResponseStatus fetchJSON
+  let rawJSON = getResponseBody fetchJSON
+  print $ rawJSON
+  let json = decode rawJSON :: Maybe Bot
+  return . Bot.result . fromJust $ json
+
+startBot :: Int -> State -> IO ()
+startBot n cache = do
+  result <- getJSON n
+  if null result then 
+    startBot n cache
+    else do
+      let last = getLastUpdateId result + 1
+      let (textParametr, cache') = getInfo (getTextId result) cache
+      sequence_ (requestList textParametr)
+      print cache
+      startBot last cache'
+
+getTextId :: [Bot.Results] -> [(Message.UserID, Message.MessageText)]
+getTextId = map helper
+  where helper x = (userId x, text x)
+        text x = Bot.text . Bot.message $ x
+        userId x = Bot.userId . Bot.from . Bot.message $ x  
+
+getLastUpdateId :: [Bot.Results] -> Int
+getLastUpdateId = Bot.update_id . last 
+
+
+requestList :: [(Int, Int, T.Text)] -> [IO ()]
+requestList = map (\(n, userId, text) ->  Message.sendMessage n userId text)
+
 data User = User {
         userID :: Int
       , activeFunction :: Bool
       , numberOfRepeat :: Int
   } deriving (Show, Eq, Ord)
 
+newtype State = State {
+    cache :: Map.Map Int User
+  } deriving (Show)
 
-createUser :: Message.UserID -> User
-createUser userId = User {userID = userId, activeFunction = True, numberOfRepeat = defaultNumOfRepeat}
-
-findUsersN :: Message.UserID -> Map.Map Int User -> Int
-findUsersN n users = maybe defaultNumOfRepeat numberOfRepeat user
-  where user = Map.lookup n users
-
-addCache :: Int -> User -> State (Map.Map Int User) User
-addCache userId user = state $ \st -> (user, Map.insert userId user st)
-
-findInCache :: Message.UserID -> State (Map.Map Int User) Int
-findInCache n = state $ \st -> (findUsersN n st, st) 
-
-defaultNumOfRepeat :: Int
 defaultNumOfRepeat = 1
 
-getJSON :: Int -> IO [Results]
-getJSON n = do
-  fetchJSON <- httpLBS $ Message.updateRequest n
-  print $ getResponseStatus fetchJSON
-  let rawJSON = getResponseBody fetchJSON
-  let json = decode rawJSON :: Maybe Bot
-  return . Bot.result . fromJust $ json
+createUser :: Message.UserID -> User
+createUser userId = User {userID = userId, activeFunction = True, numberOfRepeat = 1}
 
-startBot :: Int -> Map.Map Int User -> IO ()
-startBot n cache = do
-  result <- getJSON n
-  let last = getLastUpdateId result
-  return ()
+defaultUser :: User
+defaultUser = User {userID = 0, activeFunction = False, numberOfRepeat = defaultNumOfRepeat}
 
-getLastUpdateId :: [Bot.Results] -> Int
-getLastUpdateId = Bot.update_id . last 
+checkInCache :: Int -> State -> Maybe User
+checkInCache userId state = Map.lookup userId (cache state)
 
-getTextId :: [Bot.Results] -> [(Message.UserID, Message.MessageText)]
-getTextId = map helper
-  where helper x = (userId x, text x)
-        text x = Bot.text . Bot.message $ x
-        userId x = Bot.userId . Bot.from . Bot.message $ x
+addCache :: Int -> User -> State -> State
+addCache userId user state = State {cache = Map.insert userId user $ cache state}
 
-requestList :: Int -> [(Int, T.Text)] -> [IO ()]
-requestList n = map (uncurry (Message.sendMessage n))
+isNum :: T.Text -> Bool
+isNum text = (all isDigit . T.unpack) text && ((read . T.unpack $ text) < 7)
 
+process :: (Int, T.Text) -> State -> ((Int, Int, T.Text), State)
+process (userId, "/repeat") state = ((1, userId, "/repeat"), addCache userId (createUser userId) state)
+process (userId, text) state = 
+  let user = fromMaybe defaultUser (checkInCache userId state)
+      newNumOfRep = read . T.unpack $ text
+      text' 
+        | activeFunction user && not (isNum text) = "The number of repeat entered is incorrect"
+        | activeFunction user && isNum text = "The number of repeat is changed"
+        | otherwise = text
+      state'
+        | activeFunction user && isNum text= addCache userId (user {numberOfRepeat = newNumOfRep, activeFunction = False}) state
+        | otherwise = state
+      info = (numberOfRepeat user ,userId, text')
+  in (info, state')
+
+
+getInfo :: [(Int, T.Text)] -> State -> ([(Int, Int, T.Text)], State)
+getInfo [] state = ([], state)
+getInfo (x:xs) state = let (zs, state) = getInfo xs state' in (info:zs, state')
+  where (info, state') = process x state
+
+
+run = startBot (-1) (State {cache = Map.empty})

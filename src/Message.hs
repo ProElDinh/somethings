@@ -64,7 +64,7 @@ keyboardsButton = ReplyKeyboardMarkup { keyboard = [[KeyboardButton "1", Keyboar
 
 replyMarkup keyboardsButton = [("reply_markup", Just . BC.concat . L.toChunks . encode . toJSON $ keyboardsButton)]
 chatId userId = [("chat_id", Just . BC.pack . show $ userId)]
-messageText text = [("text", Just "text")]
+messageText text = [("text", Just . E.encodeUtf8  $ text)]
 
 
 processing :: Int -> MessageText -> MessageText  -- func for processed the text
@@ -74,11 +74,11 @@ processing n "/repeat" = "Количество текущих повторов: 
 processing n text = mconcat $ replicate n (text <> "\n")
 
 defaultMessage :: Int -> UserID -> MessageText -> Request  
-defaultMessage n userId text = setRequestQueryString (chatId userId <> (messageText . processing n $ text))
+defaultMessage n userId text = setRequestQueryString (chatId userId <> (messageText . processing n $ text) )
                              $ createRequest "/sendMessage"
 
 messageRequest :: Int -> UserID -> MessageText -> Request  -- create request based on text
-messageRequest n userId "/repeat" = setRequestQueryString (replyMarkup keyboardsButton)
+messageRequest n userId "/repeat" = setRequestQueryString (chatId userId <> (messageText . processing n $ "/repeat") <> replyMarkup keyboardsButton )
                                   $ defaultMessage n userId "/repeat"
 messageRequest n userId text =  defaultMessage n userId text
 
