@@ -3,7 +3,7 @@ module Logger where
 import           Data.Time.Clock    
 import qualified Data.Text    as T
 import qualified Data.Text.IO as TIO
-
+import Control.Monad.IO.Class
 data Priority
     = Debug    -- ^ Debug messages
     | Info     -- ^ Notable information that requires no immediate action.
@@ -27,5 +27,7 @@ showTime time = "{" <> (T.pack . show $ time) <> "}"
 
 
 
-getInfo :: T.Text -> UTCTime -> IO ()
-getInfo text time = TIO.putStrLn . T.concat $ [showT Info, showTime time, "\t", text]
+getInfo ::(MonadIO m) => T.Text -> m ()
+getInfo text = do
+    time <- liftIO getCurrentTime
+    liftIO . TIO.putStrLn . T.concat $ [showT Info, showTime time, "\t", text]

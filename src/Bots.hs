@@ -16,24 +16,24 @@ data TelegramBot =  TelegramBot {
 instance FromJSON TelegramBot
 
 data Results = Results {
-              updateId :: Int
-            , message :: Maybe Message
+              updateId      :: Int
+            , message       :: Maybe Message
             , callbackQuery :: Maybe CallbackQuery
     } deriving (Show)
 
 instance FromJSON Results where
     parseJSON (Object v) =
             Results <$> v .: "update_id"
-                    <*> v .:? "message" .!= Nothing
-                    <*> v .:? "callback_query" .!= Nothing
+                    <*> v .:? "message"         .!= Nothing
+                    <*> v .:? "callback_query"  .!= Nothing
 
 data Message = Message {
-            messageId :: Int
-            , from :: From
-            , chat :: Chat
-            , date :: Int
-            , text :: T.Text
-            , replyMarkup :: Maybe InlineKeyboardMarkup
+            messageId       :: Int
+            , from          :: From
+            , chat          :: Chat
+            , date          :: Int
+            , text          :: Maybe T.Text
+            , replyMarkup   :: Maybe InlineKeyboardMarkup
 } deriving (Show)
 
 instance FromJSON Message where
@@ -42,15 +42,15 @@ instance FromJSON Message where
                 <*> v .: "from"
                 <*> v .: "chat"
                 <*> v .: "date"
-                <*> v .: "text"
+                <*> v .: "text"          .!= Nothing
                 <*> v .:? "reply_markup" .!= Nothing
 
 data From = From {
-              userId :: Int
-            , isBot :: Bool
-            , firstName :: T.Text
-            , lastName :: Maybe T.Text
-            , language :: Maybe T.Text
+              userId        :: Int
+            , isBot         :: Bool
+            , firstName     :: T.Text
+            , lastName      :: Maybe T.Text
+            , language      :: Maybe T.Text
 } deriving (Show)
 
 instance FromJSON From where
@@ -62,10 +62,10 @@ instance FromJSON From where
                  <*> v .:? "language_code" .!= Nothing
 
 data Chat = Chat {
-              chatId :: Int
-            , cFirstName :: T.Text
-            , cLastName_ :: T.Text
-            , chatType :: T.Text
+              chatId        :: Int
+            , cFirstName    :: T.Text
+            , cLastName_    :: T.Text
+            , chatType      :: T.Text
 } deriving (Show)
 
 
@@ -78,12 +78,12 @@ instance FromJSON Chat where
 
 
 data CallbackQuery = CallbackQuery {
-          cBQId :: T.Text
-        , cBQFrom :: From
-        , cBQMessage :: Message
-        , cBQinlineMessageId :: Maybe T.Text
-        , cBQChatInstance :: T.Text 
-        , cBQData :: T.Text
+          cBQId                 :: T.Text
+        , cBQFrom               :: From
+        , cBQMessage            :: Message
+        , cBQinlineMessageId    :: Maybe T.Text
+        , cBQChatInstance       :: T.Text 
+        , cBQData               :: T.Text
 } deriving (Show)
 
 instance FromJSON CallbackQuery where
@@ -94,10 +94,15 @@ instance FromJSON CallbackQuery where
                                          <*> v .: "chat_instance"
                                          <*> v .: "data"
 
-newtype InlineKeyboardMarkup = InlineKeyboardMarkup {inline_keyboard ::[[InlineKeyboardButton]]} deriving Show
+newtype InlineKeyboardMarkup = InlineKeyboardMarkup {inline_keyboard ::[[InlineKeyboardButton]]} deriving (Show, Generic)
+
+instance ToJSON InlineKeyboardMarkup where
+    toJSON (InlineKeyboardMarkup inlinekey) = object ["inline_keyboard" .= inlinekey]
+
 
 instance FromJSON InlineKeyboardMarkup where
     parseJSON (Object v) = InlineKeyboardMarkup <$> v.: "inline_keyboard"
+
 
 data InlineKeyboardButton = InlineKeyboardButton {
                 inlineText :: T.Text
@@ -106,6 +111,13 @@ data InlineKeyboardButton = InlineKeyboardButton {
            ,    switchInlineQuery :: Maybe T.Text 
 
 } deriving (Show)
+
+instance ToJSON InlineKeyboardButton where
+    toJSON (InlineKeyboardButton text url callback_data switchInlineQuery) = object [
+            "text" .= text,
+            "url" .= url,
+            "callback_data" .= callback_data,
+            "switch_inline_query" .= switchInlineQuery]
 
 instance FromJSON InlineKeyboardButton where
     parseJSON (Object v) = InlineKeyboardButton

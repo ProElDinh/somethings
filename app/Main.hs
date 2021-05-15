@@ -18,9 +18,9 @@ import            Control.Monad.IO.Class
 main :: IO ()
 main = undefined
 
-startBot :: ReaderT Int IO ()
+startBot :: (MonadIO m) => ReaderT Int m ()
 startBot = do
   lastUpdateId <- ask
-  telegramJSON <- lift $ Methods.getUpdates lastUpdateId
-  lift $ print telegramJSON
+  telegramJSON <- Methods.getUpdates lastUpdateId
+  liftIO $ print telegramJSON
   return ()
