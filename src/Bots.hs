@@ -33,6 +33,7 @@ data Message = Message {
             , chat          :: Chat
             , date          :: Int
             , text          :: Maybe T.Text
+            , sticker       :: Maybe Sticker
             , replyMarkup   :: Maybe InlineKeyboardMarkup
 } deriving (Show)
 
@@ -42,8 +43,9 @@ instance FromJSON Message where
                 <*> v .: "from"
                 <*> v .: "chat"
                 <*> v .: "date"
-                <*> v .: "text"          .!= Nothing
-                <*> v .:? "reply_markup" .!= Nothing
+                <*> v .:? "text"            .!= Nothing
+                <*> v .:? "sticker"         .!= Nothing
+                <*> v .:? "reply_markup"    .!= Nothing
 
 data From = From {
               userId        :: Int
@@ -58,8 +60,8 @@ instance FromJSON From where
             From <$> v .: "id"
                  <*> v .: "is_bot"
                  <*> v .: "first_name"
-                 <*> v .:? "last_name" .!= Nothing
-                 <*> v .:? "language_code" .!= Nothing
+                 <*> v .:? "last_name"      .!= Nothing
+                 <*> v .:? "language_code"  .!= Nothing
 
 data Chat = Chat {
               chatId        :: Int
@@ -127,10 +129,48 @@ instance FromJSON InlineKeyboardButton where
                     <*> v .:? "switch_inline_query" .!= Nothing
 
 
+data Sticker = Sticker {
+            sFile_id         :: T.Text 
+        ,   sFile_unique_id  :: T.Text 
+        ,   sWidth           :: Int
+        ,   sHeight          :: Int
+        ,   sIs_animated     :: Bool
+        ,   sThumb           :: PhotoSize
+        ,   sEmoji           :: T.Text 
+        ,   sSet_name        :: T.Text
+        ,   sMask_position   :: Maybe MaskPosition
+        ,   sFile_size       :: Int
+} deriving (Show)
 
+instance FromJSON Sticker where
+    parseJSON (Object v) = Sticker
+                    <$> v .: "file_id"
+                    <*> v .: "file_unique_id" 
+                    <*> v .: "width" 
+                    <*> v .: "height"
+                    <*> v .: "is_animated"
+                    <*> v .: "thumb" 
+                    <*> v .: "emoji" 
+                    <*> v .: "set_name"
+                    <*> v .:? "mask_position" .!= Nothing 
+                    <*> v .: "file_size" 
 
+data PhotoSize = PhotoSize {
+            file_id         :: T.Text 
+        ,   file_unique_id  :: T.Text 
+        ,   width           :: Int
+        ,   height          :: Int
+        ,   file_size       :: Int
+} deriving (Show, Generic)
 
+instance FromJSON PhotoSize
 
+data MaskPosition = MaskPosition {
+            point           :: T.Text
+        ,   x_shift         :: Double
+        ,   y_shift         :: Double
+        ,   scale           :: Double
+} deriving (Show, Generic)
 
-
+instance FromJSON MaskPosition
 

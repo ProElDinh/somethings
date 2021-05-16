@@ -38,18 +38,22 @@ getUpdates n = do
 sendText :: (MonadIO m) => Int -> UserID -> MessageText -> m ()  -- send messages to users n-times
 sendText n userId text = do
     getInfo "Отправка сообщения пользователю"
-    let request = setRequestQueryString (defaultQuery n userId text) defaultMessage
+    let request = setRequestQueryString (defaultQuery n userId text) sendMessage
     replicateM_ n (httpNoBody request)
 
 sendInlineButton :: (MonadIO m) => Int -> UserID -> m ()  -- send inline button to change user's num of repeat
 sendInlineButton n userId = do
-    getInfo "Изменение количество повторов у пользователя"
-    let request = setRequestQueryString (defaultQuery n userId "/repeat" <> queryReplyMarkup keyboardsButton ) defaultMessage
+    getInfo "Изменение кол-во повторов у пользователя"
+    let request = setRequestQueryString (defaultQuery n userId "/repeat" <> queryReplyMarkup keyboardsButton ) sendMessage
     httpNoBody request
     return ()
 
-
-answerToQuery = undefined
+answerToQuery :: (MonadIO m) => T.Text -> m ()
+answerToQuery userId = do
+    getInfo "Кол-во повторов пользователя был изменен"
+    let request = setRequestQueryString (queryCallback userId <> queryMessageText "Кол-во повторов были изменены") answerCallbackQuery
+    liftIO $ httpLBS request
+    return ()
 
 sendSticker= undefined
 
@@ -66,12 +70,14 @@ buildRequest host method path =
 telegramHost :: BC.ByteString
 telegramHost = "api.telegram.org"
 
-
 createRequest :: BC.ByteString -> Request
 createRequest method = buildRequest telegramHost "GET" ("/bot" <> Token.botToken <> method)
 
-defaultMessage ::  Request  
-defaultMessage = createRequest "/sendMessage"
+sendMessage ::  Request  
+sendMessage = createRequest "/sendMessage"
+
+answerCallbackQuery :: Request 
+answerCallbackQuery = createRequest "/answerCallbackQuery"
 
 -- keyboard interface for users
 keyboardsButton :: InlineKeyboardMarkup  
@@ -90,7 +96,7 @@ processing _ text = text <> "\n"
 queryReplyMarkup keyboardsButton = [("reply_markup", Just . BC.concat . L.toChunks . encode . toJSON $ keyboardsButton)]
 queryChatId userId = [("chat_id", Just . BC.pack . show $ userId)]
 queryMessageText text = [("text", Just . E.encodeUtf8  $ text)]
-
+queryCallback userId = [("callback_query_id", Just . E.encodeUtf8  $ userId)]
 
 defaultQuery :: Int -> UserID -> MessageText -> Query
 defaultQuery n userId text = queryChatId userId <> (queryMessageText . processing n $ text)
