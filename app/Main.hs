@@ -16,16 +16,44 @@ import            Control.Monad.State
 import            Control.Monad.Except
 import            Control.Monad.IO.Class
 import            Data.Monoid
+import            Data.Maybe
 import qualified  Data.Map                as M
 main :: IO ()
 main = undefined 
 
-startBot :: (MonadIO m) => ReaderT Int (StateT (Writer (M.Map Int Int) Int) m) ()
+data TextType = Message | Sticker | Videos | Picture | QueryAnswer | Repeat | Help deriving (Show)
+
+startBot :: (MonadIO m) => StateT (M.Map Int Int) (ReaderT (Int) m) ()
 startBot = do
-  lastUpdateId <- ask
-  telegramJSON <- Methods.getUpdates lastUpdateId
+  cache <- get
+  lastId <- updateId 0
+  telegramJSON <- Methods.getUpdates lastId
+  when (not . null . Bots.result $ telegramJSON) (liftIO $ putStrLn "")
   liftIO $ print telegramJSON
   return ()
+    where updateId num = do
+            get
+            return num
+          func = do
+              lastId <- updateId 0
+              telegramJSON <- Methods.getUpdates lastId
+              return ()
 
-runBot ::(MonadIO m) => m ((), Writer (M.Map Int Int) Int)
-runBot = runStateT (runReaderT (forever startBot) (0)) (writer (0,M.empty))
+runBot ::(MonadIO m) => m ((), M.Map Int Int)
+runBot = runReaderT (runStateT startBot M.empty) 0
+
+
+processMessage :: Bots.Results -> TextType
+processMessage result = case Bots.message result of
+                          Nothing -> QueryAnswer
+                          Just mes -> typeOfMessages mes
+
+typeOfMessages :: Bots.Message -> TextType
+typeOfMessages mes
+  | isNothing $ Bots.sticker mes = Sticker
+  | otherwise = typeOfText . fromJust . Bots.text $ mes
+
+typeOfText :: T.Text ->  TextType
+typeOfText "/help"    = Help
+typeOfText "/repeat"  = Repeat
+typeOfText _          = Message
